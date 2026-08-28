@@ -1,245 +1,237 @@
+# [English](README.md) | 中文
+
 <!--
   SPDX-FileCopyrightText: 2024-2026 LimX Dynamics Technology Co., Ltd.
   SPDX-License-Identifier: Apache-2.0
 -->
 
-[English](README.md) | [中文](README_zh-CN.md)
-
 > **发布渠道。** 本仓库的主发布点为 GitHub：
-> <https://github.com/limx-tron2/tron2-mujoco-sim>。
+> <https://github.com/limxdynamics/tron2_mujoco_sim>。
 > LimX 内部 GitLab 为镜像；Issue、PR 与安全报告请提交到 GitHub。
 
-# tron2-mujoco-sim 使用说明
+# tron2-mujoco-sim
 
-面向 TRON2A 人形平台的 MuJoCo 仿真器。`simulator.py` 将 LimX 底层
-SDK（`RobotCmd` / `RobotState`，字段 `q` / `dq` / `tau` / `Kp` /
-`Kd`）与 `mujoco.MjData` 打通，让驱动真实机器人的同一套控制器接口
-可以直接在仿真环境中运行。
+TRON2 系列机器人的 MuJoCo 仿真器。它把 LimX 底层 SDK（`RobotCmd` / `RobotState`
+承载 `q` / `dq` / `tau` / `Kp` / `Kd`，以及 `ImuData` 与夹爪消息）桥接到
+`mujoco.MjData`，使得驱动真机的同一套控制器线格式可以直接对着仿真跑。
+
+构型是声明出来的，不是写死的：一个构型 = 若干关节通道 + 可选模块，在
+`tron2_sim/variants/` 里拼装。所有受支持构型的所有通道都走 SDK 的 `*ForSim`
+仿真端接口——不存在第二套消息栈。
 
 ## 许可与归属
 
-本项目采用 **Apache License, Version 2.0**（2004 年 1 月）授权。
-完整许可文本见 [`LICENSE`](LICENSE)。SPDX 标识符：`Apache-2.0`。
+Apache License 2.0，见 [`LICENSE`](LICENSE)，SPDX 标识 `Apache-2.0`。
 
-- [`NOTICE`](NOTICE) — 必需的归属声明。
-- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — 各子模块与
-  依赖的来源信息，以及文档媒体资源的审阅记录。
-- [`SECURITY.md`](SECURITY.md) — 漏洞上报流程，以及仿真 vs 实机
-  的边界说明。
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Python 与子模块工作流、
-  DCO 签署要求、子模块 commit 升级流程。
-- [`CHANGELOG.md`](CHANGELOG.md) — 发布记录，含所有待负责人签字
-  确认的条目。
+- [`NOTICE`](NOTICE) —— 归属声明
+- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) —— 逐 submodule、逐依赖的来源与许可
+- [`SECURITY.md`](SECURITY.md) —— 漏洞报告流程，以及仿真与真机的边界
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) —— 开发流程、submodule 更钉步骤、DCO 签署
+- [`CHANGELOG.md`](CHANGELOG.md) —— 版本说明与受上游阻塞项
 
-## 适用范围与除外
+## 收录范围
 
-**本仓库包含：**
+**收录：** `simulator.py`、`tron2_sim/` 包（含随仓发布的夹爪标定，位于
+`tron2_sim/config/`）与文档。submodule 只按 commit **声明**，不入仓：
 
-- `simulator.py` — MuJoCo 仿真器与 LimX SDK 桥接。
-- 文档（`README.md`、`doc/*.jpg`、`doc/*.gif`、`doc/*.GIF`）。
-- 子模块**声明**（通过 `.gitmodules`）— 共三个子模块按 commit 固定,
-  需单独初始化：
-  - `robot-description/` — URDF / MJCF 网格与模型。
-  - `robot-joystick/` — 手柄辅助程序。
-  - `limxsdk-lowlevel/` — LimX 底层 SDK（含预编译 wheel）。
+- `robot-description/` —— URDF / MJCF 模型与网格
+- `robot-joystick/` —— 手柄辅助程序，用于手动操控控制器（见
+  [§3a 手柄操控](#3a-手柄操控)）
+- `limxsdk-lowlevel/` —— LimX 底层 SDK 及预编译 wheel
 
-**本仓库不包含（有意为之）：**
+**刻意不收录：** 训练好的控制策略（`.onnx`、`.pt`、`.pth`、`.ckpt`）、直接提交进
+本仓的 SDK 二进制或 wheel、标定值、固件、bag 录制，以及任何硬编码的私网地址。
+命令示例一律用占位符 `<robot-ip>`，默认端点是 `127.0.0.1`。
 
-- 子模块本身。clone 后请执行
-  `git submodule update --init --recursive`（或 clone 时加
-  `--recurse-submodules`）。子模块的许可与再分发状态见
-  [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) §2
-  （当前为 `⚠ TO CONFIRM`）。
-- ONNX 控制策略（`.onnx`、`.pt`、`.pth`、`.ckpt`）。仿真器本身
-  不直接加载它们；加载工作由姊妹仓库
-  **`tron2-rl-deploy-python`** 中的部署栈完成 —
-  见 [§3 模型文件位置](#3-模型文件位置)。
-- SDK 的二进制（`.so`、`.dll`）或 wheel（`.whl`）不会直接进入
-  本仓库；SDK wheel 位于 `limxsdk-lowlevel` 子模块中。
-- 工厂标定数据、固件、运动 / bag 数据。
+## 1. 依赖与部署
 
-[§2 运行控制器](#2-运行控制器)中出现的 `<robot-ip>` 是**占位符**，
-运行前请替换为您自己机器人或仿真器的实际 IP。本仓库源码不包含任何
-硬编码的私网地址。仅内部使用的姊妹仓库 `tron2-rl-deploy-ros` 在其
-源码 / launch 文件中保留了一处作为文档示例的字面量 `10.192.1.2`，
-已在该仓库的 `SECURITY.md` 中声明；本仓库有意不含此类字面量。
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| Python | >= 3.10 | 已在 3.10 验证 |
+| `mujoco` | >= 3.2.2 | 物理与 passive viewer |
+| `PyYAML` | >= 6.0 | 读 `tron2_sim/config/gripper_config.yaml` |
+| `limxsdk` | 4.8+ | arch 相关的 wheel，位于 `limxsdk-lowlevel` submodule 内；单独安装且必须带 `--no-deps` |
 
-## 1. 运行仿真
-
-### Step 1: 打开终端
-
-### Step 2: 克隆仓库
+两种方式都先克隆：
 
 ```bash
-git clone --recurse-submodules https://github.com/limx-tron2/tron2-mujoco-sim.git
-```
-
-If you already cloned without submodules:
-
-```bash
+git clone --recurse-submodules https://github.com/limxdynamics/tron2_mujoco_sim.git
 cd tron2-mujoco-sim
-git submodule update --init --recursive
 ```
 
-### Step 3: 安装 Python 依赖
+若此前未带 submodule 克隆，先执行 `git submodule update --init --recursive`。
+
+### 方式 A：uv（推荐）
+
+[uv](https://docs.astral.sh/uv/) 会自动装好对应版本的 Python，按仓内已提交的
+`uv.lock` 解析全部依赖，无需手动管理虚拟环境：
 
 ```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # 安装 uv
+uv sync --extra sdk                               # 物理 + SDK
+
+export ROBOT_TYPE=SF_TRON2A
+uv run simulator.py                               # 图形模式
+uv run simulator.py --headless                    # 无图形（CI / 远程）
+uv run simulator.py --headless --duration 30      # 运行 30 秒后退出
+
+uv run simulator.py --headless --duration 30 --no-grasper  # 不加载 DACH 2F 夹爪
+```
+
+`uv sync` 需要 `limxsdk-lowlevel` submodule 已检出——SDK wheel 就在里面。之后若
+再执行一次不带 `--extra sdk` 的 `uv sync`，`limxsdk` 会被移除。
+
+### 方式 B：pip
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -U pip
-pip install mujoco numpy scipy pyyaml onnxruntime pygame
-```
+pip install "mujoco>=3.2.2" "pyyaml>=6.0"
 
-### Step 4: 安装 LimX SDK（必须）
+# 按机器架构选 SDK wheel。--no-deps 是必须的：该 wheel 自带的元数据会拖进
+# onnxruntime/pygame/scipy/pandas，并把 numpy 钉在 <1.26.4。
+pip install --no-deps limxsdk-lowlevel/python3/amd64/limxsdk-*.whl     # x86_64
+# pip install --no-deps limxsdk-lowlevel/python3/aarch64/limxsdk-*.whl # aarch64
 
-根据机器架构安装 SDK wheel（示例）：
-
-```bash
-# x86_64
-pip install limxsdk-lowlevel/python3/amd64/limxsdk-*-py3-none-any.whl
-
-# aarch64
-pip install limxsdk-lowlevel/python3/aarch64/limxsdk-*-py3-none-any.whl
-```
-
-### Step 5: 设置机器人型号
-
-当前支持：
-
-- `SF_TRON2A`
-- `WF_TRON2A`
-
-示例：
-
-```bash
 export ROBOT_TYPE=SF_TRON2A
+python3 simulator.py                              # 图形模式
+python3 simulator.py --headless --duration 30
 ```
 
-### Step 6: 启动 MuJoCo 仿真器
+### 环境变量
+
+| 变量 | 默认值 | 作用 |
+|---|---|---|
+| `ROBOT_TYPE` | *（必填）* | 选择构型，如 `SF_TRON2A` |
+| `ROBOT_IP` | `127.0.0.1` | SDK 端点 |
+| `GRIPPER_CONFIG` | `tron2_sim/config/gripper_config.yaml` | 改用其它 DACH 夹爪标定文件 |
+| `DACH_GRASPER` | `1` | 置 `0` 改加载 `robot.xml` 而非 `robot_grasper.xml`，等价于 `--no-grasper` |
+
+## 2. 支持的构型
+
+共 10 型：5 个基名 × `TRON2A` / `TRON2B` 两族。两族的关节名与线序完全一致，
+控制器代码无需改动即可分别连接。
+
+| 基名 | TRON2A | TRON2B | 说明 |
+|---|---|---|---|
+| SF | `SF_TRON2A` | `SF_TRON2B` | 掌足双足（10 关节）|
+| WF | `WF_TRON2A` | `WF_TRON2B` | 轮足双足（10 关节）|
+| DA | `DA_TRON2A` | `DA_TRON2B` | 双臂（14 关节）|
+| DACH | `DACH_TRON2A` | `DACH_TRON2B` | 双臂 + 2 自由度头（16 关节），可选 2F 夹爪 |
+| DASF | `DASF_TRON2A` | `DASF_TRON2B` | 拼人形：SF 双足 + DACH 双臂头（26 关节）|
+
+## 3. 键盘控制（图形模式）
+
+- **空格** —— 暂停 / 恢复。暂停即手动模式：右侧 Control 滑条直接摆位关节。
+  （DACH 2F 夹爪在手动模式空转，既不跟滑条也不跟命令。）
+- **R** —— 仅复位浮动基座位姿，关节角保留。固定基座构型打印提示后忽略。
+- **Backspace / Reset 按钮** —— 全量复位（选中 keyframe 时按 keyframe）。
+- **双击选中 + Ctrl 拖拽** —— 施加扰动力。
+
+### 3a. 手柄操控
+
+对于运行姊妹仓库 `tron2-rl-deploy-python` 部署栈的 SF/WF 构型手柄操控流程，
+先初始化 `robot-joystick` submodule，再与控制器一起运行辅助程序：
 
 ```bash
-cd tron2-mujoco-sim
-python3 simulator.py
+./robot-joystick/robot-joystick
 ```
 
-可选：指定 SDK 通信 IP（默认 `127.0.0.1`）：
+默认按键映射：
 
-```bash
-python3 simulator.py 127.0.0.1
+- `L1 + Y` —— 切换到 WALK。
+- `L1 + X` —— 切回 IDLE。
+- `R1` —— 清空速度指令。
+
+## 4. 通信
+
+**线序契约**（cmd/state 下标序，2A/2B 相同）：DACH 头为 pitch→yaw，DASF 头为
+**yaw→pitch**。个别模型的 XML 执行器声明序与线序不同，由仿真按关节名解析吸收
+——绝不按位置假设。
+
+行为要点：
+
+- **Centaur 通道（DASF）的 cmd 建议携带关节名**（`RobotCmd.motor_names`）。native
+  层会拿它与已发布的 state 做校验，不匹配则拦截并刷
+  `ERROR: Centaur ... RobotCmd does not match the corresponding RobotState`。
+  仿真端发布的 state 始终带真实关节名。
+- DACH 2F 夹爪标定见 `tron2_sim/config/gripper_config.yaml`。
+- DACH grasper 模型上，`grasper_base_{L,R}_Joint_ctrl` 由连杆机构带动而非由通道
+  驱动，其 `ctrl` 恒为 0，启动时会打印一行 `INFO: unowned actuators`，属预期。
+
+## 5. 架构
+
+```
+simulator.py            入口：ROBOT_TYPE → 构型注册表 → SimCore
+tron2_sim/
+  spec.py               线序 + 构型规格（纯数据）
+  core.py               物理/渲染双线程、双 MjData 快照、手动模式、复位
+  channels.py           JointChannel：按名 joint_map + MIT 控律 + state/IMU 出站
+  transports.py         SdkBus（limxsdk *ForSim）与能力守卫
+  config/               YAML 加载 + 随仓发布的 gripper_config.yaml
+  modules/              可选能力；dach_grasper（2F 连杆夹爪）
+  variants/             每基名一个文件；__init__.py 是注册表
+doc/gif/                演示动图（见下方画廊）
 ```
 
----
+线程模型：物理线程独占物理 `MjData`，渲染线程独占 `render_data`；UI 复位与拖拽力
+经标志与缓冲移交，`MjData` 永远单写者。
 
-## 2. 运行控制器
+## 6. TRON2B 与 TRON2A 的差异
 
-### Step 1: 打开新终端
+关节命名、顺序与话题逐字节相同，控制器代码无需改动。但 2B 是硬件换代，
+**为 2A 训练/整定的策略与增益不可直接套用**。
 
-### Step 2: 启动 ONNX 控制入口
+| 差异项 | TRON2A | TRON2B |
+|---|---|---|
+| 髋 pitch/roll、膝力矩 | ±150 N·m | **±200 N·m**（armature 同步更新）|
+| 髋 yaw、踝 pitch、肘力矩 | ±60 / ±70 N·m | **±70 N·m** |
+| 腕、头力矩 | ±20 N·m | **±15 N·m** |
+| `base_Link` 质量（SF/WF/DA/DACH）| 12.57 kg | **13.4 kg**（质心/惯量同步更新）|
+| SF 膝 / 髋 yaw 限位 | `knee: [-2.618, 0.262]` | **符号翻转** `knee: [-0.262, 2.618]`，连杆几何随之镜像 |
+| DA / DACH 基座 | 浮动（近刚性 freejoint）| **固定**（无 freejoint，R 键打印提示后忽略）|
 
-```bash
-cd tron2-rl-deploy-python
-export ROBOT_TYPE=SF_TRON2A
-python3 main.py
-```
+## 7. 演示画廊
 
-可选：指定机器人 IP（和 tron1 用法一致）：
+均由本仿真器录制，每个构型一段。
 
-```bash
-# 说明：<robot-ip> 是占位符，运行前请替换为您自己机器人 /
-# 仿真器的实际 IP。本仓库源码未硬编码任何私网地址。
-# （仅内部使用的姊妹仓库 tron2-rl-deploy-ros 在其源码 /
-# launch 文件中保留了作为文档示例的字面量 10.192.1.2，
-# 已在该仓库的 SECURITY.md 中声明。）
-python3 main.py <robot-ip>
-```
+| 构型 | 演示 |
+|---|---|
+| `SF_TRON2A` | ![SF_TRON2A](doc/gif/SF_TRON2A.gif) |
+| `WF_TRON2A` | ![WF_TRON2A](doc/gif/WF_TRON2A.gif) |
+| `DACH_TRON2A` | ![DACH_TRON2A](doc/gif/DACH_TRON2A.gif) |
+| `DASF_TRON2A` | ![DASF_TRON2A](doc/gif/DASF_TRON2A.gif) |
 
-### Step 3: 手柄控制说明
+媒体规范见 [`doc/gif/README.md`](doc/gif/README.md)，由 CI 强制。
 
-- `L1 + Y`：切换到 WALK
-- `L1 + X`：切回 IDLE
-- `R1`：清空速度指令
-- 打开一个 Bash 终端。
+## 8. FAQ
 
-- 运行 robot-joystick：
+**`Error: Please set the ROBOT_TYPE ...`** —— 先 export `ROBOT_TYPE`，报错信息里
+列出了全部合法值。
 
-  ```
-  ./robot-joystick/robot-joystick
-  ```
----
+**`uv sync` 报缺 `limxsdk-*.whl`** —— `limxsdk-lowlevel` submodule 未检出，
+执行 `git submodule update --init --recursive`。
 
-## 3. 模型文件位置
+**`limxsdk ... does not support the Centaur simulator side`** —— 当前 SDK 版本
+早于 Centaur 接口，`DASF_*` 跑不了。需把 `limxsdk-lowlevel` submodule 更新到带
+`RobotType.Centaur` 与 LowerBody/UpperBody `*ForSim` 方法的版本。
 
+**`Error: none of ['robot.xml'] exists under ...`** —— `robot-description`
+submodule 缺失，或该构型的资产尚未发布。
 
-请将 ONNX 模型按机型放在：
+**`No module named limxsdk`** —— 建环境时没带 extra，执行 `uv sync --extra sdk`。
+注意之后再跑一次不带 extra 的 `uv sync` 会把它移除。若走 pip 安装，则是 wheel 没装，
+或装到了另一个解释器里（不是跑 `simulator.py` 的那个）。
 
-- `tron2-rl-deploy-python/controllers/model/<ROBOT_TYPE>/policy.onnx`
-- `tron2-rl-deploy-python/controllers/model/<ROBOT_TYPE>/encoder.onnx`
-- `tron2-rl-deploy-python/controllers/model/<ROBOT_TYPE>/params.yaml`
+**`python3 -m venv` 报 `ensurepip` 错误** —— Debian / Ubuntu 上标准库的 venv 模块
+是单独打包的：`sudo apt install python3-venv`。或者改用方式 A，它不需要任何系统包。
 
-例如：
+**机器人加载了但一动不动** —— 没有控制器在发命令；或（`DASF_*` 的情形）命令未带
+`motor_names`，被 native 层拦截。
 
-- `tron2-rl-deploy-python/controller/model/SF_TRON2A/...`
-- `tron2-rl-deploy-python/controller/model/WF_TRON2A/...`
+**输出重定向到管道后消失** —— 已修复；旧检出上遇到时可设 `PYTHONUNBUFFERED=1`。
 
----
-
-## 4. 效果展示
-
-### 仿真部署 (Simulation)
-
-![SF Simulation](doc/sfmj-ezgif.com-video-to-gif-converter.gif)
-![WF Simulation](doc/wfmj-ezgif.com-video-to-gif-converter.gif)
-
-### 实机部署 (Real-world)
-
-实机部署时请悬挂启动控制器
-
-![Deploy](doc/deploy.jpg)
-
-![SF Real-world](doc/sf.GIF)
-![WF Real-world](doc/wf.GIF)
-
-
-## 5. 常见问题
-
-- `ROBOT_TYPE not set`：先执行 `export ROBOT_TYPE=...`
-- `Model not found`：检查 `controller/model/<ROBOT_TYPE>/` 下模型文件是否齐全
-- `No module named limxsdk`：SDK wheel 未安装到当前 Python 环境
-- `RobotState has not been received yet`：通常是仿真器没启动，或仿真与控制器的 `ROBOT_TYPE` 不一致
-
-## 验证
-
-下列命令与 CI 保持一致（见
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）；在提交
-PR 前本地跑一遍，可以省去大量来回。
-
-```bash
-# 1. 字节码编译仿真器入口
-python -m py_compile simulator.py
-
-# 2. 子模块已声明并（本地）已初始化
-git submodule status --recursive
-
-# 3. 代码风格检查（与 CI 一致）
-pip install ruff
-ruff check --exclude robot-description --exclude robot-joystick \
-           --exclude limxsdk-lowlevel --exclude __pycache__ .
-
-# 4. MuJoCo 导入检查（无 MuJoCo 环境可跳过）
-pip install "mujoco>=2.3"
-python -c "import mujoco; print('mujoco', mujoco.__version__)"
-
-# 5. 无禁止入库的文件被暂存
-git ls-files | grep -iE '(^|/)__pycache__(/|$)|\.(pyc|onnx|pt|pth|ckpt|so|dll|whl|bag|mcap)$' && echo BAD || echo OK
-```
-
-完整仿真 dry-run（加载 MuJoCo 模型，不接控制器 —
-可视化窗口出现后按 Ctrl-C 结束）：
-
-```bash
-export ROBOT_TYPE=SF_TRON2A
-python3 simulator.py 127.0.0.1
-```
-
-## 引用与支持
+## 9. 引用与支持
 
 如果你在学术或公开工作中使用了本仿真器，请引用本仓库：
 
@@ -248,14 +240,14 @@ python3 simulator.py 127.0.0.1
   title  = {TRON2 MuJoCo simulator},
   author = {LimX Dynamics},
   year   = {2026},
-  howpublished = {\url{https://github.com/limx-tron2/tron2-mujoco-sim}}
+  howpublished = {\url{https://github.com/limxdynamics/tron2_mujoco_sim}}
 }
 ```
 
 - **Bug 反馈 / 功能建议：**
-  [GitHub Issues](https://github.com/limx-tron2/tron2-mujoco-sim/issues)。
+  [GitHub Issues](https://github.com/limxdynamics/tron2_mujoco_sim/issues)。
 - **使用问题 / 集成帮助：**
-  [GitHub Discussions](https://github.com/limx-tron2/tron2-mujoco-sim/discussions)。
+  [GitHub Discussions](https://github.com/limxdynamics/tron2_mujoco_sim/discussions)。
 - **安全问题上报：** 邮箱 `contact@limxdynamics.com`；仿真 vs 实机
   的边界说明见 [`SECURITY.md`](SECURITY.md)。
 - **公司 / 商务联系：** <https://www.limxdynamics.com>。

@@ -1,0 +1,53 @@
+[project]
+name = "tron2-mujoco-sim"
+version = "0.1.0"
+description = "MuJoCo simulator for the TRON2 robot family, bridging limxsdk to MuJoCo"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "mujoco>=3.2.2",
+    "pyyaml>=6.0",
+]
+
+# limxsdk is an opt-in extra because it lives in the limxsdk-lowlevel submodule
+# rather than on a package index: `uv sync` alone must still work in a clone whose
+# submodules are not initialized. Install it with `uv sync --extra sdk`.
+[project.optional-dependencies]
+sdk = [
+    "limxsdk; platform_machine == 'x86_64'",
+    "limxsdk; platform_machine == 'aarch64'",
+]
+
+[tool.uv]
+package = false
+
+# These paths are inside the limxsdk-lowlevel submodule, so `uv sync` requires it
+# to be checked out (`git clone --recurse-submodules`, or `git submodule update
+# --init --recursive`). The filenames carry the wheel version and must be updated
+# when the submodule pin moves to a new SDK release.
+[tool.uv.sources]
+limxsdk = [
+    { path = "limxsdk-lowlevel/python3/amd64/limxsdk-4.0.2-py3-none-any.whl", marker = "platform_machine == 'x86_64'" },
+    { path = "limxsdk-lowlevel/python3/aarch64/limxsdk-4.0.2-py3-none-any.whl", marker = "platform_machine == 'aarch64'" },
+]
+
+# The shipped wheel declares onnxruntime/pygame/scipy/pandas and pins
+# numpy<1.26.4. None of that is used by this simulator, and the numpy pin would
+# hold mujoco back, so the metadata is overridden to declare no dependencies.
+[[tool.uv.dependency-metadata]]
+name = "limxsdk"
+version = "4.0.2"
+requires-dist = []
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["robot-description", "limxsdk-lowlevel", "asset_converter"]
+
+# Pinned explicitly so CI does not drift when ruff changes its defaults.
+# BLE (blind-except) is deliberately not selected: this codebase uses broad
+# `except Exception` at degrade boundaries -- config loading, module attach, SDK
+# native callbacks, per-tick publishing -- where an exception must never kill the
+# physics thread or escape into a native thread. Every such handler reports.
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF"]

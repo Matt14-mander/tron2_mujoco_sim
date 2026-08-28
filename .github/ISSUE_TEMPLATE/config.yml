@@ -6,6 +6,12 @@ contact_links:
       Do NOT open a public issue for security reports. Email
       contact@limxdynamics.com; see SECURITY.md for the full policy,
       including the sim-vs-real boundary note.
+  - name: Robot models and meshes
+    url: https://github.com/limxdynamics/tron2-robot-description/issues
+    about: Issues with URDF / MJCF assets belong in the description repository.
+  - name: LimX low-level SDK
+    url: https://github.com/limxdynamics/limxsdk-lowlevel/issues
+    about: Missing or misbehaving SDK APIs belong in the SDK repository.
   - name: General questions
     url: https://github.com/limx-tron2/tron2-mujoco-sim/discussions
     about: >

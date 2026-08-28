@@ -1,10 +1,14 @@
 TRON2 MuJoCo simulator
 Copyright (c) 2024-2026 LimX Dynamics Inc.
 
-This product contains a Python MuJoCo-based simulator (`simulator.py`) that
-bridges the LimX low-level SDK (`RobotCmd` / `RobotState`, with q / dq / tau /
-Kp / Kd) to a MuJoCo `MjModel` / `MjData` simulation of the TRON2A humanoid
-platform, together with the accompanying documentation and media.
+This product contains a Python MuJoCo-based simulator (`simulator.py`,
+`tron2_sim/`) that bridges the LimX low-level SDK simulator-side API
+(`RobotCmd` / `RobotState` with q / dq / tau / Kp / Kd, plus `ImuData`
+and gripper `GripperCmd` / `GripperState`) to a MuJoCo `MjModel` /
+`MjData` simulation of the TRON2 robot family (SF, WF, DA, DACH, and
+DASF variants), so a controller can drive the simulated robot over
+exactly the same wire format it uses on hardware, together with the
+accompanying documentation and media.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may
 not use these files except in compliance with the License. You may obtain
@@ -16,6 +20,6 @@ or at:
 This repository consumes three git submodules — `robot-description`,
 `robot-joystick`, and `limxsdk-lowlevel` — which are not vendored here and
 carry their own licenses. Their status, provenance, and re-distribution
-terms are tracked in THIRD_PARTY_NOTICES.md and are pending owner
-sign-off. Runtime dependencies (MuJoCo, onnxruntime, NumPy, SciPy,
-PyYAML, pygame) are neither vendored nor packaged in this repository.
+terms are tracked in THIRD_PARTY_NOTICES.md. Runtime dependencies
+(MuJoCo, PyYAML) are neither vendored nor packaged in this repository;
+they are resolved at install time from the Python package index.

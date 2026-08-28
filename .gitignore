@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
 .Python
 *.egg-info/
 *.egg
@@ -27,6 +31,7 @@ env/
 # --- editor / OS junk ---
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 *~
@@ -55,3 +60,5 @@ Thumbs.db
 /tmp/
 /out/
 *.log
+MUJOCO_LOG.TXT
+asset_converter/

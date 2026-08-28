@@ -17,10 +17,17 @@
 /CONTRIBUTING.md                        @limx-tron2/maintainers
 /CHANGELOG.md                           @limx-tron2/maintainers
 
-# Simulator core — SDK bridge and MuJoCo model loading.
+# Simulator core — SDK bridge and MuJoCo model loading, including the
+# variant registry (tron2_sim/) that assembles per-robot channel sets.
 # Changes here can affect the sim-vs-real boundary, so both the
 # simulator owners and the SDK / robotics owners must review.
 /simulator.py                           @limx-tron2/sim @limx-tron2/sdk @limx-tron2/robotics
+/tron2_sim/                             @limx-tron2/sim @limx-tron2/sdk @limx-tron2/robotics
+
+# Dependency surface and reproducibility.
+/pyproject.toml                         @limx-tron2/sim @limx-tron2/maintainers
+/uv.lock                                @limx-tron2/sim @limx-tron2/maintainers
+/.python-version                        @limx-tron2/sim @limx-tron2/maintainers
 
 # Submodule declarations — a pin change is a supply-chain change.
 /.gitmodules                            @limx-tron2/legal @limx-tron2/sdk @limx-tron2/maintainers

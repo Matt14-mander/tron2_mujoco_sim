@@ -5,11 +5,11 @@ Please fill in the sections below. Delete any that are not applicable.
 
 ## Summary
 
-<!-- One paragraph: what and why. -->
+<!-- One paragraph: what and why. Link the issue this closes, if any. -->
 
 ## Type of change
 
-- [ ] `fix`      — corrects a defect in `simulator.py`, CI, or docs
+- [ ] `fix`      — corrects a defect in `simulator.py`, `tron2_sim/`, CI, or docs
 - [ ] `feat`     — new capability (new robot type, new SDK message, etc.)
 - [ ] `docs`     — README, THIRD_PARTY_NOTICES, CONTRIBUTING, SECURITY
 - [ ] `ci`       — GitHub Actions or verification tooling
@@ -18,10 +18,14 @@ Please fill in the sections below. Delete any that are not applicable.
 
 ## Affected surfaces
 
-- [ ] `simulator.py` (SDK ↔ MuJoCo bridge)
+- [ ] `simulator.py` / `tron2_sim/` (SDK ↔ MuJoCo bridge, variant registry)
 - [ ] Documentation / media (`README.md`, `doc/`)
 - [ ] CI / templates (`.github/`)
 - [ ] Meta / repo-wide
+
+## Robot types affected
+
+<!-- e.g. SF_TRON2A, WF_TRON2A, DA_TRON2A, DACH_TRON2A, DASF_TRON2A, all, none (docs only) -->
 
 ## Submodule pin update
 
@@ -40,13 +44,17 @@ Paste the output (or a summary) of the local verification steps from
 `CONTRIBUTING.md#verification-before-opening-a-pr`:
 
 ```text
-py_compile:              ...
-ruff check:              ...
-git submodule status:    ...
-mujoco import:           ...
-simulator.py dry-run:    ...
+uv run python -m py_compile simulator.py $(find tron2_sim -name '*.py')
+uvx ruff check .
+git submodule status
+ROBOT_TYPE=<TYPE> uv run simulator.py --headless --duration 5
 forbidden-artifacts scan: ...
 ```
+
+- [ ] Byte-compiles and passes `ruff check`.
+- [ ] Affected robot types start headless without errors.
+- [ ] Controller-side loopback exercised, if the bridge changed.
+      (Centaur types require `motor_names` on the command.)
 
 ## Provenance & sensitivity
 
@@ -72,6 +80,7 @@ forbidden-artifacts scan: ...
 
 ## Checklist
 
+- [ ] Comments and runtime messages are English, no decorative emoji.
 - [ ] `CHANGELOG.md` has an entry under `## [Unreleased]`.
 - [ ] All commits are DCO-signed (`git commit -s`).
 - [ ] CI is expected to pass.
@@ -79,3 +88,7 @@ forbidden-artifacts scan: ...
 ## Related issues
 
 <!-- Fixes #123 / Refs #456 -->
+
+## Notes for reviewers
+
+<!-- Anything non-obvious: trade-offs considered, follow-ups deferred. -->

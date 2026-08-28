@@ -8,19 +8,19 @@ assignees: ''
 
 ## Affected component
 
-<!-- e.g. simulator.py, README.md, .github/workflows/ci.yml -->
+<!-- e.g. simulator.py, tron2_sim/variants/*.py, README.md, .github/workflows/ci.yml -->
 
 - File(s):
-- Robot type: `SF_TRON2A` / `WF_TRON2A` / other
+- Robot type (`$ROBOT_TYPE`): `SF_TRON2A` / `WF_TRON2A` / `DA_TRON2A` / `DACH_TRON2A` / `DASF_TRON2A` / other
 - Commit / tag:
-- Submodule pins (`git submodule status --recursive`):
+- Submodule pins (`git submodule status`):
 
 ## Environment
 
 - OS + arch (e.g. Ubuntu 22.04 x86_64 / aarch64):
-- Python version:
-- MuJoCo version:
-- LimX SDK wheel: `limxsdk-*-py3-none-any.whl` filename
+- Python (`uv run python -V`):
+- MuJoCo (`uv run python -c "import mujoco; print(mujoco.__version__)"`):
+- limxsdk resolved from (`uv run python -c "import limxsdk, os; print(os.path.dirname(limxsdk.__file__))"`):
 - Are you running against a real robot?  **No — sim only** / Yes
 
   > If Yes, review `SECURITY.md`; do not attach PoCs that could
@@ -39,7 +39,7 @@ assignees: ''
 git clone --recurse-submodules https://github.com/limx-tron2/tron2-mujoco-sim.git
 cd tron2-mujoco-sim
 export ROBOT_TYPE=SF_TRON2A
-python3 simulator.py 127.0.0.1
+uv run simulator.py --headless --duration 5
 ```
 
 ## Additional context
@@ -49,7 +49,10 @@ python3 simulator.py 127.0.0.1
 ## Checklist
 
 - [ ] I have searched existing issues.
-- [ ] I have included the exact commit / tag and submodule status.
+- [ ] I have included the exact commit / tag and submodule status
+      (`git submodule status` shows no leading `-`).
+- [ ] The problem reproduces with `--headless`, ruling out the viewer.
+- [ ] No other simulator or controller instance is running on the same host.
 - [ ] I am **not** reporting a security issue (those go to
       `contact@limxdynamics.com` per `SECURITY.md`).
 - [ ] I did not attach any control policies, calibration values,
