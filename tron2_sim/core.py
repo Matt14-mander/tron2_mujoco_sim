@@ -28,7 +28,34 @@ import mujoco
 import mujoco.viewer
 
 from .channels import JointChannel
+from .model_loader import load_mujoco_model
 from .transports import SdkBus
+
+
+def apply_initial_joint_positions(model, data, positions):
+    """Apply variant-level scalar joint positions after the model keyframe.
+
+    Upstream assets do not consistently provide a named keyframe.  Variants
+    such as SFYG nevertheless need a safe arm pose because zero is a hard limit
+    for arm2/arm3.  Resolve by name and reject incompatible joint types instead
+    of relying on MJCF declaration order.
+    """
+    for name, value in positions.items():
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid < 0:
+            raise ValueError(f"initial-position joint '{name}' not found in model")
+        joint_type = model.jnt_type[jid]
+        if joint_type not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+            raise ValueError(f"initial-position joint '{name}' is not scalar")
+        lo, hi = model.jnt_range[jid]
+        if model.jnt_limited[jid] and not (float(lo) <= value <= float(hi)):
+            raise ValueError(
+                f"initial position {value} for '{name}' is outside [{float(lo)}, {float(hi)}]"
+            )
+        data.qpos[int(model.jnt_qposadr[jid])] = value
+
+    if positions:
+        mujoco.mj_forward(model, data)
 
 
 class SimCore:
@@ -59,7 +86,7 @@ class SimCore:
             print(f"WARNING: {xml_dirs[0]} not found, falling back to the flat "
                   f"layout tron2/{spec.robot_type}/xml")
         print(f"*** Model File Loaded: {self.model_path} ***")
-        self.model = mujoco.MjModel.from_xml_path(self.model_path)
+        self.model = load_mujoco_model(self.model_path)
         self.data = mujoco.MjData(self.model)
         self.dt = self.model.opt.timestep
 
@@ -71,6 +98,14 @@ class SimCore:
             mujoco.mj_forward(self.model, self.data)
             name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_KEY, key_id)
             print(f"Initial pose from keyframe: '{name}'")
+        apply_initial_joint_positions(
+            self.model, self.data, spec.initial_joint_positions
+        )
+        if spec.initial_joint_positions:
+            print(
+                "Initial joint overrides: "
+                + ", ".join(spec.initial_joint_positions)
+            )
 
         # ---- channel resolution (model only) ----
         self.channels = [JointChannel(cs).resolve(self.model) for cs in spec.channels]
@@ -79,8 +114,9 @@ class SimCore:
 
         # ---- bus ----
         self.sdk_bus = SdkBus(spec.sdk_robot) if spec.sdk_robot else None
-        for ch in self.channels:
-            ch.bind(self.sdk_bus)
+        if self.sdk_bus is not None:
+            for ch in self.channels:
+                ch.bind(self.sdk_bus)
 
         # ---- modules: a failed attach means the capability is unavailable ----
         self.modules = []
@@ -246,19 +282,22 @@ class SimCore:
         elif not self.paused:
             for ch in self.channels:
                 ch.compute_ctrl(self.data)
-            for mod in self.modules:
-                mod.on_control(self, self.dt)
             if self.viewer is not None:
                 with self._state_lock:
                     self.data.xfrc_applied[:] = self._viewer_xfrc
+            else:
+                self.data.xfrc_applied[:] = 0.0
+            for mod in self.modules:
+                mod.on_control(self, self.dt)
             mujoco.mj_step(self.model, self.data)
         # 5. read state (always; publishing is gated separately)
         for ch in self.channels:
             ch.read_state(self.data, self.manual_mode)
         # 6. publish
         if (not self.paused) or self.spec.publish_when_paused:
-            for ch in self.channels:
-                ch.publish(self.data)
+            if self.sdk_bus is not None:
+                for ch in self.channels:
+                    ch.publish(self.data)
             for mod in self.modules:
                 mod.on_publish(self)
         # 7. snapshot hand-off (taken between steps, so the viewer never sees a

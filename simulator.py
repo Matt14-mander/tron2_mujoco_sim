@@ -28,8 +28,23 @@ def parse_args():
                      help="DACH_*: load robot.xml without the gripper (arms + head only)")
     parser.add_argument("--headless", action="store_true",
                         help="run without a viewer; physics and I/O pipelines are unchanged")
+    parser.add_argument("--no-sdk", action="store_true",
+                        help="disable SDK I/O for offline model/physics validation only")
     parser.add_argument("--duration", type=float, default=None,
                         help="exit automatically after N seconds (default: run until Ctrl+C)")
+    parser.add_argument(
+        "--external-wrench", type=float, nargs=6, default=None,
+        metavar=("FX", "FY", "FZ", "MX", "MY", "MZ"),
+        help="SFYG_* only: validation wrench at the selected body origin (N, N*m)")
+    parser.add_argument("--wrench-body", default="base_Link",
+                        help="body receiving --external-wrench (default: base_Link)")
+    parser.add_argument("--wrench-frame", choices=("body", "world"), default="body",
+                        help="frame of --external-wrench (default: body)")
+    parser.add_argument("--wrench-profile", choices=("step", "ramp", "sine"), default="step")
+    parser.add_argument("--wrench-start", type=float, default=0.0)
+    parser.add_argument("--wrench-duration", type=float, default=None)
+    parser.add_argument("--wrench-ramp-time", type=float, default=0.25)
+    parser.add_argument("--wrench-frequency", type=float, default=1.0)
     cli, _ = parser.parse_known_args()
     return cli
 
@@ -53,6 +68,9 @@ def main():
 
     from tron2_sim.core import SimCore
     robot_spec = BASE_REGISTRY[base](robot_type, family_dir, cli)
+    if cli.no_sdk:
+        robot_spec.sdk_robot = None
+        print("WARNING: SDK I/O disabled (--no-sdk); offline validation only")
     SimCore(robot_spec, _SCRIPT_DIR, headless=cli.headless).run(duration=cli.duration)
     # limxsdk/fastdds participants race during interpreter teardown (occasional
     # SIGSEGV after all work is done). Every thread has stopped by now, so exit hard

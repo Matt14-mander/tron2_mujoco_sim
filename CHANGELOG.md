@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `SFYG_TRON2A` whole-body simulation support with a fixed 18-joint wire order
+  (10 legs, 6 arm, 2 gripper), a safe arm/gripper startup pose, and name-based
+  joint/actuator resolution.
+- Optional SFYG external-wrench validation profiles (`step`, `ramp`, `sine`)
+  at either the base or a payload body, with an explicit base-frame/base-origin
+  ground-truth contract that is kept outside controller observations.
+- A Windows-safe in-memory MJCF loading fallback for workspace paths containing
+  non-ASCII characters.
 - `tron2_sim/` variant-registry package: robot selection is now
   data-driven (`tron2_sim/variants/{sf,wf,da,dach,dasf}.py`) instead of
   hard-coded in `simulator.py`. Supported robot types expanded from two

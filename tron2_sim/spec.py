@@ -38,6 +38,12 @@ HEAD_YP = ["head_yaw_Joint", "head_pitch_Joint"]          # DASF wire order: yaw
 # DASF humanoid composite: arms carry a `_U` infix.
 ARM_DA_U = [n.replace("_L_Joint", "_L_U_Joint").replace("_R_Joint", "_R_U_Joint") for n in ARM_DA]
 
+# SFYG single-arm whole-body composite.  Keep the wire order grouped exactly as
+# the deploy controller consumes it: locomotion legs, arm MPC, then gripper.
+ARM_YG = [f"arm{i}_Joint" for i in range(1, 7)]
+GRIPPER_YG = ["gripper1_Joint", "gripper2_Joint"]
+SFYG = LEG_SF + ARM_YG + GRIPPER_YG
+
 
 # ---------------- spec dataclasses ----------------
 @dataclass
@@ -69,6 +75,7 @@ class RobotSpec:
     modules: list = field(default_factory=list)     # SimModule instances (dropped if attach returns False)
     sdk_robot: str | None = "Tron2"      # "Tron2" | "Centaur" | None (no SDK instance)
     keyframe: str = "default_pose"          # applied as the initial pose when the model defines it
+    initial_joint_positions: dict[str, float] = field(default_factory=dict)
     publish_when_paused: bool = False
     cam: tuple[float, float] = (10.0, -20.0)  # (distance, elevation)
 

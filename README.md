@@ -85,6 +85,7 @@ export ROBOT_TYPE=SF_TRON2A
 uv run simulator.py                               # with viewer
 uv run simulator.py --headless                    # no graphics (CI / remote)
 uv run simulator.py --headless --duration 30      # exit after 30 s
+uv run simulator.py --headless --duration 1 --no-sdk  # offline physics smoke test only
 
 uv run simulator.py --headless --duration 30 --no-grasper  # DACH without the 2F gripper
 ```
@@ -121,13 +122,14 @@ python3 simulator.py --headless --duration 30
 
 ## 2. Supported robot types
 
-Ten types: five base names in a `TRON2A` and a `TRON2B` variant. Joint names and
-wire order are identical across the two families, so a controller needs no
-changes to talk to either.
+The original five base names are available for both `TRON2A` and `TRON2B`.
+`SFYG` is currently available for `TRON2A`, matching the asset in the pinned
+robot-description revision.
 
 | Base | TRON2A | TRON2B | Description |
 |---|---|---|---|
 | SF | `SF_TRON2A` | `SF_TRON2B` | Sole-foot biped (10 joints) |
+| SFYG | `SFYG_TRON2A` | — | Sole-foot biped + 6-DoF arm + 2-DoF gripper (18 joints) |
 | WF | `WF_TRON2A` | `WF_TRON2B` | Wheel-foot biped (10 joints) |
 | DA | `DA_TRON2A` | `DA_TRON2B` | Dual arm (14 joints) |
 | DACH | `DACH_TRON2A` | `DACH_TRON2B` | Dual arm + 2-DOF head (16 joints), optional 2F gripper |
@@ -170,6 +172,9 @@ resolving joints by name — never by position.
 
 Behavioural notes:
 
+- **SFYG wire order is legs 0-9, arm 10-15, gripper 16-17.** Publish a complete
+  named 18-joint `RobotCmd`; the deployment process combines the 10 leg policy
+  actions with the six OCS2 arm targets and two gripper targets.
 - **Commands on Centaur channels (DASF) should carry joint names**
   (`RobotCmd.motor_names`). The native layer validates them against the
   published state and rejects mismatches with
@@ -179,6 +184,30 @@ Behavioural notes:
 - On DACH grasper models, `grasper_base_{L,R}_Joint_ctrl` are driven by the
   linkage rather than by a channel, so their `ctrl` stays 0 and the simulator
   prints an `INFO: unowned actuators` line at startup. This is expected.
+
+### 4a. SFYG external-wrench validation
+
+An optional validation module applies a known wrench without exposing its
+ground truth to the controller or policy. The six values are
+`Fx Fy Fz Mx My Mz` at the selected body origin, in N and N*m:
+
+```bash
+export ROBOT_TYPE=SFYG_TRON2A
+uv run simulator.py --external-wrench 0 40 0 0 0 0 \
+  --wrench-body base_Link --wrench-frame body \
+  --wrench-profile step --wrench-start 2 --wrench-duration 1
+```
+
+`--wrench-profile` also accepts `ramp` and `sine`; use
+`--wrench-ramp-time` or `--wrench-frequency` for their parameters. When the
+target is `gripper_base_Link`, the module shifts and rotates the known wrench to
+the base-origin contract internally for later estimator evaluation. This test
+wrench must not be used while replaying the same synthetic disturbance through
+another mechanism.
+
+`--no-sdk` explicitly disables all simulator-side SDK I/O. It is intended only
+for model, actuator-map and physics smoke tests on hosts where the native SDK is
+unavailable; it is not a sim2sim deployment mode.
 
 ## 5. Architecture
 
@@ -192,7 +221,7 @@ tron2_sim/
                         state/IMU publishing
   transports.py         SdkBus (limxsdk *ForSim) and the capability guard
   config/               YAML loading + the shipped gripper_config.yaml
-  modules/              optional capabilities; dach_grasper (2F linkage gripper)
+  modules/              optional capabilities; DACH grasper and validation wrench
   variants/             one file per base name; __init__.py is the registry
 doc/gif/                demo animations (see the gallery below)
 ```

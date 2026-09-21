@@ -16,6 +16,7 @@ dist/
 pip-wheel-metadata/
 .pytest_cache/
 .ruff_cache/
+.uv-cache/
 .mypy_cache/
 .tox/
 .coverage

@@ -74,6 +74,7 @@ export ROBOT_TYPE=SF_TRON2A
 uv run simulator.py                               # 图形模式
 uv run simulator.py --headless                    # 无图形（CI / 远程）
 uv run simulator.py --headless --duration 30      # 运行 30 秒后退出
+uv run simulator.py --headless --duration 1 --no-sdk  # 仅离线物理烟雾测试
 
 uv run simulator.py --headless --duration 30 --no-grasper  # 不加载 DACH 2F 夹爪
 ```
@@ -109,12 +110,13 @@ python3 simulator.py --headless --duration 30
 
 ## 2. 支持的构型
 
-共 10 型：5 个基名 × `TRON2A` / `TRON2B` 两族。两族的关节名与线序完全一致，
-控制器代码无需改动即可分别连接。
+原有5个基名同时支持 `TRON2A` / `TRON2B`。`SFYG` 当前仅支持固定版本
+robot-description 中已有模型的 `TRON2A`。
 
 | 基名 | TRON2A | TRON2B | 说明 |
 |---|---|---|---|
 | SF | `SF_TRON2A` | `SF_TRON2B` | 掌足双足（10 关节）|
+| SFYG | `SFYG_TRON2A` | — | 掌足双足 + 6自由度机械臂 + 2自由度夹爪（18关节）|
 | WF | `WF_TRON2A` | `WF_TRON2B` | 轮足双足（10 关节）|
 | DA | `DA_TRON2A` | `DA_TRON2B` | 双臂（14 关节）|
 | DACH | `DACH_TRON2A` | `DACH_TRON2B` | 双臂 + 2 自由度头（16 关节），可选 2F 夹爪 |
@@ -151,6 +153,9 @@ python3 simulator.py --headless --duration 30
 
 行为要点：
 
+- **SFYG线序固定为腿0-9、机械臂10-15、夹爪16-17。** 部署进程应把10维腿部
+  policy输出、6维OCS2机械臂目标和2维夹爪目标合并成带关节名的完整18维
+  `RobotCmd`。
 - **Centaur 通道（DASF）的 cmd 建议携带关节名**（`RobotCmd.motor_names`）。native
   层会拿它与已发布的 state 做校验，不匹配则拦截并刷
   `ERROR: Centaur ... RobotCmd does not match the corresponding RobotState`。
@@ -158,6 +163,26 @@ python3 simulator.py --headless --duration 30
 - DACH 2F 夹爪标定见 `tron2_sim/config/gripper_config.yaml`。
 - DACH grasper 模型上，`grasper_base_{L,R}_Joint_ctrl` 由连杆机构带动而非由通道
   驱动，其 `ctrl` 恒为 0，启动时会打印一行 `INFO: unowned actuators`，属预期。
+
+### 4a. SFYG外部wrench验证
+
+可选验证模块可施加已知wrench，但不会把真值发送给控制器或policy。六个数依次为目标
+body原点处的 `Fx Fy Fz Mx My Mz`，单位为N和N*m：
+
+```bash
+export ROBOT_TYPE=SFYG_TRON2A
+uv run simulator.py --external-wrench 0 40 0 0 0 0 \
+  --wrench-body base_Link --wrench-frame body \
+  --wrench-profile step --wrench-start 2 --wrench-duration 1
+```
+
+`--wrench-profile` 还支持 `ramp` 和 `sine`，分别通过 `--wrench-ramp-time` 和
+`--wrench-frequency` 配置。当目标为 `gripper_base_Link` 时，模块会在内部把已知
+wrench旋转并平移到base原点契约，供后续estimator评估。不得同时通过其它机制重复
+施加同一合成扰动。
+
+`--no-sdk` 会显式关闭全部仿真端SDK通信，仅用于缺少原生SDK的主机进行模型、执行器
+映射和物理烟雾测试，不是正式sim2sim部署模式。
 
 ## 5. 架构
 
@@ -169,7 +194,7 @@ tron2_sim/
   channels.py           JointChannel：按名 joint_map + MIT 控律 + state/IMU 出站
   transports.py         SdkBus（limxsdk *ForSim）与能力守卫
   config/               YAML 加载 + 随仓发布的 gripper_config.yaml
-  modules/              可选能力；dach_grasper（2F 连杆夹爪）
+  modules/              可选能力；DACH连杆夹爪与验证wrench
   variants/             每基名一个文件；__init__.py 是注册表
 doc/gif/                演示动图（见下方画廊）
 ```
