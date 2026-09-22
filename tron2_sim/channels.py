@@ -22,6 +22,7 @@ class JointChannel:
         self.imu_ids = None           # (quat_id, gyro_id, acc_id) or None
         self._state = ([0.0] * self.n, [0.0] * self.n, [0.0] * self.n)  # (q, dq, tau)
         self._sdk = None
+        self.has_command = False
 
     # ---------------- model resolution (pure mujoco, usable offline) ----------------
     def resolve(self, model):
@@ -101,6 +102,13 @@ class JointChannel:
                 for i in range(mm):
                     new[key][i] = float(src[i])
         self.cmd = new  # single assignment swaps the reference
+        # SimCore uses this latch to keep gravity from advancing the model
+        # between simulator startup and the first complete controller command.
+        # Partial packets must not release the model with zero gains/targets.
+        if use_names:
+            self.has_command = all(name in names for name in self.spec.joints)
+        else:
+            self.has_command = len(q) >= self.n
 
     # ---------------- control law / state ----------------
     def compute_ctrl(self, data):

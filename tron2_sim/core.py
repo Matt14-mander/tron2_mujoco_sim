@@ -125,6 +125,9 @@ class SimCore:
         if self.sdk_bus is not None:
             for ch in self.channels:
                 ch.bind(self.sdk_bus)
+        self._awaiting_first_command = self.sdk_bus is not None and bool(self.channels)
+        if self._awaiting_first_command:
+            print("Waiting for the first complete RobotCmd before advancing physics")
 
         # ---- modules: a failed attach means the capability is unavailable ----
         self.modules = []
@@ -289,16 +292,23 @@ class SimCore:
                 mod.on_manual(self)
             mujoco.mj_forward(self.model, self.data)
         elif not self.paused:
-            for ch in self.channels:
-                ch.compute_ctrl(self.data)
-            if self.viewer is not None:
-                with self._state_lock:
-                    self.data.xfrc_applied[:] = self._viewer_xfrc
-            else:
-                self.data.xfrc_applied[:] = 0.0
-            for mod in self.modules:
-                mod.on_control(self, self.dt)
-            mujoco.mj_step(self.model, self.data)
+            if self._awaiting_first_command and all(
+                ch.has_command for ch in self.channels
+            ):
+                self._awaiting_first_command = False
+                self._resync_clock = True
+                print("First complete RobotCmd received; physics released")
+            if not self._awaiting_first_command:
+                for ch in self.channels:
+                    ch.compute_ctrl(self.data)
+                if self.viewer is not None:
+                    with self._state_lock:
+                        self.data.xfrc_applied[:] = self._viewer_xfrc
+                else:
+                    self.data.xfrc_applied[:] = 0.0
+                for mod in self.modules:
+                    mod.on_control(self, self.dt)
+                mujoco.mj_step(self.model, self.data)
         # 5. read state (always; publishing is gated separately)
         for ch in self.channels:
             ch.read_state(self.data, self.manual_mode)
