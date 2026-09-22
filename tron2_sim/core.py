@@ -44,8 +44,16 @@ def apply_initial_joint_positions(model, data, positions):
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if jid < 0:
             raise ValueError(f"initial-position joint '{name}' not found in model")
-        joint_type = model.jnt_type[jid]
-        if joint_type not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+        # MuJoCo releases expose ``jnt_type`` as a NumPy integer while the
+        # Python enum implementation has changed across bindings.  Normalize
+        # both sides to plain integers so a hinge cannot be rejected merely
+        # because the binding's enum comparison semantics differ.
+        joint_type = int(model.jnt_type[jid])
+        scalar_types = {
+            int(mujoco.mjtJoint.mjJNT_HINGE),
+            int(mujoco.mjtJoint.mjJNT_SLIDE),
+        }
+        if joint_type not in scalar_types:
             raise ValueError(f"initial-position joint '{name}' is not scalar")
         lo, hi = model.jnt_range[jid]
         if model.jnt_limited[jid] and not (float(lo) <= value <= float(hi)):
@@ -229,8 +237,9 @@ class SimCore:
     def _reset_base_pose(self):
         """R key: reset the floating-base freejoint to qpos0 and zero base velocity,
         keeping joint angles."""
+        free_type = int(mujoco.mjtJoint.mjJNT_FREE)
         free = [j for j in range(self.model.njnt)
-                if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
+                if int(self.model.jnt_type[j]) == free_type]
         if not free:
             print("WARNING: no floating base, ignoring base reset")
             return
