@@ -66,6 +66,22 @@ def apply_initial_joint_positions(model, data, positions):
         mujoco.mj_forward(model, data)
 
 
+def apply_initial_base_position(model, data, position):
+    """Override the translation of the first floating-base joint by name-independent address."""
+    if position is None:
+        return
+    free_type = int(mujoco.mjtJoint.mjJNT_FREE)
+    free_joints = [
+        jid for jid in range(model.njnt)
+        if int(model.jnt_type[jid]) == free_type
+    ]
+    if not free_joints:
+        raise ValueError("initial base position requires a floating-base joint")
+    qpos_adr = int(model.jnt_qposadr[free_joints[0]])
+    data.qpos[qpos_adr:qpos_adr + 3] = position
+    mujoco.mj_forward(model, data)
+
+
 class SimCore:
     def __init__(self, spec, script_dir, headless=False):
         self.spec = spec
@@ -106,9 +122,14 @@ class SimCore:
             mujoco.mj_forward(self.model, self.data)
             name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_KEY, key_id)
             print(f"Initial pose from keyframe: '{name}'")
+        apply_initial_base_position(
+            self.model, self.data, spec.initial_base_position
+        )
         apply_initial_joint_positions(
             self.model, self.data, spec.initial_joint_positions
         )
+        if spec.initial_base_position is not None:
+            print(f"Initial base position: {spec.initial_base_position}")
         if spec.initial_joint_positions:
             print(
                 "Initial joint overrides: "

@@ -13,6 +13,16 @@ from ..modules.external_wrench import ExternalWrenchModule
 from ..spec import IMU_STD, SFYG, ChannelSpec, RobotSpec
 
 INITIAL_ARM_AND_GRIPPER = {
+    "proximal_pitch_L_Joint": 0.0,
+    "proximal_roll_L_Joint": 0.0,
+    "proximal_yaw_L_Joint": -3.14159,
+    "knee_L_Joint": 0.0,
+    "ankle_pitch_L_Joint": 0.0,
+    "proximal_pitch_R_Joint": 0.0,
+    "proximal_roll_R_Joint": 0.0,
+    "proximal_yaw_R_Joint": 3.14159,
+    "knee_R_Joint": 0.0,
+    "ankle_pitch_R_Joint": 0.0,
     "arm1_Joint": 0.0,
     "arm2_Joint": 1.5707963267948966,
     "arm3_Joint": -1.4835298641951802,
@@ -60,6 +70,7 @@ def build(robot_type, family_dir, cli):
             )
         ],
         modules=modules,
+        initial_base_position=(0.0, 0.0, 0.85),
         initial_joint_positions=INITIAL_ARM_AND_GRIPPER,
         sdk_robot="Tron2",
         cam=(3.0, -15.0),

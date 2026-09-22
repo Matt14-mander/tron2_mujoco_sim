@@ -75,6 +75,7 @@ class RobotSpec:
     modules: list = field(default_factory=list)     # SimModule instances (dropped if attach returns False)
     sdk_robot: str | None = "Tron2"      # "Tron2" | "Centaur" | None (no SDK instance)
     keyframe: str = "default_pose"          # applied as the initial pose when the model defines it
+    initial_base_position: tuple[float, float, float] | None = None
     initial_joint_positions: dict[str, float] = field(default_factory=dict)
     publish_when_paused: bool = False
     cam: tuple[float, float] = (10.0, -20.0)  # (distance, elevation)
