@@ -8,7 +8,7 @@ import mujoco
 import numpy as np
 
 from tron2_sim.channels import JointChannel
-from tron2_sim.core import apply_initial_joint_positions
+from tron2_sim.core import apply_initial_joint_positions, apply_variant_model_overrides
 from tron2_sim.model_loader import load_mujoco_model
 from tron2_sim.modules.external_wrench import ExternalWrenchModule
 from tron2_sim.spec import ARM_YG, GRIPPER_YG, LEG_SF, SFYG
@@ -52,6 +52,25 @@ class SfygVariantTest(unittest.TestCase):
             jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
             actual = data.qpos[self.model.jnt_qposadr[jid]]
             self.assertAlmostEqual(float(actual), expected)
+
+    def test_training_dynamics_overrides_are_applied(self):
+        model = load_mujoco_model(MODEL)
+        apply_variant_model_overrides(model, self.spec)
+        self.assertAlmostEqual(model.opt.timestep, 0.005)
+        for name, expected in self.spec.joint_armature.items():
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            self.assertAlmostEqual(
+                float(model.dof_armature[model.jnt_dofadr[jid]]), expected
+            )
+        for name, expected in self.spec.joint_effort_limit.items():
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            aid = next(
+                a for a in range(model.nu)
+                if int(model.actuator_trnid[a, 0]) == jid
+            )
+            np.testing.assert_allclose(
+                model.actuator_ctrlrange[aid], (-expected, expected)
+            )
 
     def test_tron2b_fails_with_an_explicit_asset_error(self):
         with self.assertRaisesRegex(SystemExit, "SFYG_TRON2A only"):

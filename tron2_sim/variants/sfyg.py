@@ -33,6 +33,23 @@ INITIAL_ARM_AND_GRIPPER = {
     "gripper2_Joint": -0.05,
 }
 
+HEAVY_LEG_JOINTS = [
+    "proximal_pitch_L_Joint", "proximal_roll_L_Joint", "knee_L_Joint",
+    "proximal_pitch_R_Joint", "proximal_roll_R_Joint", "knee_R_Joint",
+]
+LIGHT_LEG_JOINTS = [
+    "proximal_yaw_L_Joint", "ankle_pitch_L_Joint",
+    "proximal_yaw_R_Joint", "ankle_pitch_R_Joint",
+]
+TRAINING_ARMATURE = {
+    **{name: 0.161777558 for name in HEAVY_LEG_JOINTS},
+    **{name: 0.053923687 for name in LIGHT_LEG_JOINTS},
+}
+TRAINING_EFFORT_LIMIT = {
+    **{name: 140.0 for name in HEAVY_LEG_JOINTS},
+    **{name: 40.0 for name in LIGHT_LEG_JOINTS},
+}
+
 
 def build(robot_type, family_dir, cli):
     if family_dir != "tron2a":
@@ -72,6 +89,9 @@ def build(robot_type, family_dir, cli):
         modules=modules,
         initial_base_position=(0.0, 0.0, 0.85),
         initial_joint_positions=INITIAL_ARM_AND_GRIPPER,
+        timestep=0.005,
+        joint_armature=TRAINING_ARMATURE,
+        joint_effort_limit=TRAINING_EFFORT_LIMIT,
         sdk_robot="Tron2",
         cam=(3.0, -15.0),
     )

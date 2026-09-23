@@ -82,6 +82,40 @@ def apply_initial_base_position(model, data, position):
     mujoco.mj_forward(model, data)
 
 
+def apply_variant_model_overrides(model, spec):
+    """Apply training-time dynamics values without editing the asset submodule."""
+    if spec.timestep is not None:
+        if spec.timestep <= 0.0:
+            raise ValueError("variant timestep must be positive")
+        model.opt.timestep = spec.timestep
+
+    for name, armature in spec.joint_armature.items():
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid < 0:
+            raise ValueError(f"armature override joint '{name}' not found")
+        if armature < 0.0:
+            raise ValueError(f"armature override for '{name}' must be non-negative")
+        dof_adr = int(model.jnt_dofadr[jid])
+        model.dof_armature[dof_adr] = armature
+
+    for name, limit in spec.joint_effort_limit.items():
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid < 0:
+            raise ValueError(f"effort-limit override joint '{name}' not found")
+        if limit <= 0.0:
+            raise ValueError(f"effort limit for '{name}' must be positive")
+        aid = next(
+            (a for a in range(model.nu) if int(model.actuator_trnid[a, 0]) == jid),
+            -1,
+        )
+        if aid < 0:
+            raise ValueError(f"effort-limit override actuator for '{name}' not found")
+        model.actuator_ctrllimited[aid] = 1
+        model.actuator_ctrlrange[aid] = (-limit, limit)
+        model.jnt_actfrclimited[jid] = 1
+        model.jnt_actfrcrange[jid] = (-limit, limit)
+
+
 class SimCore:
     def __init__(self, spec, script_dir, headless=False):
         self.spec = spec
@@ -111,6 +145,7 @@ class SimCore:
                   f"layout tron2/{spec.robot_type}/xml")
         print(f"*** Model File Loaded: {self.model_path} ***")
         self.model = load_mujoco_model(self.model_path)
+        apply_variant_model_overrides(self.model, spec)
         self.data = mujoco.MjData(self.model)
         self.dt = self.model.opt.timestep
 
