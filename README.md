@@ -175,6 +175,10 @@ Behavioural notes:
 - **SFYG wire order is legs 0-9, arm 10-15, gripper 16-17.** Publish a complete
   named 18-joint `RobotCmd`; the deployment process combines the 10 leg policy
   actions with the six OCS2 arm targets and two gripper targets.
+- **SFYG physics uses a 1 ms step**, as in the original XML. At 5 ms, the
+  arm5/arm6 wrists oscillate and saturate at 100 N·m under the default 60/6
+  position PD. The deployment controller still publishes at 500 Hz and runs
+  policy inference at 50 Hz.
 - **Commands on Centaur channels (DASF) should carry joint names**
   (`RobotCmd.motor_names`). The native layer validates them against the
   published state and rejects mismatches with

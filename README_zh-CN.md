@@ -156,6 +156,9 @@ robot-description 中已有模型的 `TRON2A`。
 - **SFYG线序固定为腿0-9、机械臂10-15、夹爪16-17。** 部署进程应把10维腿部
   policy输出、6维OCS2机械臂目标和2维夹爪目标合并成带关节名的完整18维
   `RobotCmd`。
+- **SFYG物理步长为1 ms。** 原XML即为1 ms；改成5 ms时，arm5/arm6在默认
+  60/6位置PD下会出现高速振荡和100 N·m饱和。部署控制器的500 Hz发送及
+  50 Hz policy推理频率不变。
 - **Centaur 通道（DASF）的 cmd 建议携带关节名**（`RobotCmd.motor_names`）。native
   层会拿它与已发布的 state 做校验，不匹配则拦截并刷
   `ERROR: Centaur ... RobotCmd does not match the corresponding RobotState`。

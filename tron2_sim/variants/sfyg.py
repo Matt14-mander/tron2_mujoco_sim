@@ -89,7 +89,10 @@ def build(robot_type, family_dir, cli):
         modules=modules,
         initial_base_position=(0.0, 0.0, 0.85),
         initial_joint_positions=INITIAL_ARM_AND_GRIPPER,
-        timestep=0.005,
+        # The arm wrist has very low inertia. Its explicit 60/6 MIT PD law
+        # oscillates at 5 ms; retain the asset's stable 1 ms physics step.
+        # The external controller/policy frequencies are unchanged.
+        timestep=0.001,
         joint_armature=TRAINING_ARMATURE,
         joint_effort_limit=TRAINING_EFFORT_LIMIT,
         # Space switches MuJoCo to manual mode; keep SDK state/IMU heartbeats

@@ -59,7 +59,7 @@ class SfygVariantTest(unittest.TestCase):
     def test_training_dynamics_overrides_are_applied(self):
         model = load_mujoco_model(MODEL)
         apply_variant_model_overrides(model, self.spec)
-        self.assertAlmostEqual(model.opt.timestep, 0.005)
+        self.assertAlmostEqual(model.opt.timestep, 0.001)
         for name, expected in self.spec.joint_armature.items():
             jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
             self.assertAlmostEqual(
@@ -80,6 +80,29 @@ class SfygVariantTest(unittest.TestCase):
             BASE_REGISTRY["SFYG"](
                 "SFYG_TRON2B", "tron2b", SimpleNamespace()
             )
+
+    def test_wrist_pd_does_not_saturate_or_oscillate_at_default_pose(self):
+        model = load_mujoco_model(MODEL)
+        apply_variant_model_overrides(model, self.spec)
+        data = mujoco.MjData(model)
+        data.qpos[2] = self.spec.initial_base_position[2]
+        apply_initial_joint_positions(model, data, self.spec.initial_joint_positions)
+        mujoco.mj_forward(model, data)
+        channel = JointChannel(self.spec.channels[0]).resolve(model)
+        for i, (qpos, _, _) in enumerate(channel.map):
+            channel.cmd["q"][i] = float(data.qpos[qpos])
+        for i in (14, 15):
+            channel.cmd["kp"][i] = 60.0
+            channel.cmd["kd"][i] = 6.0
+        peak_velocity = np.zeros(2)
+        for _ in range(round(0.3 / model.opt.timestep)):
+            channel.compute_ctrl(data)
+            mujoco.mj_step(model, data)
+            peak_velocity = np.maximum(
+                peak_velocity,
+                [abs(data.qvel[channel.map[i][1]]) for i in (14, 15)],
+            )
+        np.testing.assert_array_less(peak_velocity, np.ones(2))
 
     def test_base_wrench_contract_matches_command_at_base_origin(self):
         data = mujoco.MjData(self.model)
