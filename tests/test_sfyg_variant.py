@@ -36,6 +36,9 @@ class SfygVariantTest(unittest.TestCase):
         self.assertEqual(len(SFYG), 18)
         self.assertEqual(len(set(SFYG)), 18)
 
+    def test_state_stream_stays_alive_in_manual_pause(self):
+        self.assertTrue(self.spec.publish_when_paused)
+
     def test_every_wire_joint_resolves_to_a_unique_actuator(self):
         channel = JointChannel(self.spec.channels[0]).resolve(self.model)
         actuators = channel.actuators()

@@ -92,6 +92,9 @@ def build(robot_type, family_dir, cli):
         timestep=0.005,
         joint_armature=TRAINING_ARMATURE,
         joint_effort_limit=TRAINING_EFFORT_LIMIT,
+        # Space switches MuJoCo to manual mode; keep SDK state/IMU heartbeats
+        # alive so the external policy controller does not time out while paused.
+        publish_when_paused=True,
         sdk_robot="Tron2",
         cam=(3.0, -15.0),
     )
