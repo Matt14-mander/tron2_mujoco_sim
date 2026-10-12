@@ -28,7 +28,7 @@ import mujoco
 import mujoco.viewer
 
 from .channels import JointChannel
-from .model_loader import load_mujoco_model
+from .model_loader import load_mujoco_model, load_payload_model
 from .transports import SdkBus
 
 
@@ -144,7 +144,10 @@ class SimCore:
             print(f"WARNING: {xml_dirs[0]} not found, falling back to the flat "
                   f"layout tron2/{spec.robot_type}/xml")
         print(f"*** Model File Loaded: {self.model_path} ***")
-        self.model = load_mujoco_model(self.model_path)
+        self.model = (load_payload_model(self.model_path, **spec.payload)
+                      if spec.payload else load_mujoco_model(self.model_path))
+        if spec.payload:
+            print(f"PAINT rigid payload: {spec.payload}", flush=True)
         apply_variant_model_overrides(self.model, spec)
         self.data = mujoco.MjData(self.model)
         self.dt = self.model.opt.timestep

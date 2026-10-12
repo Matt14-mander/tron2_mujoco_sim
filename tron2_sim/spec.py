@@ -81,6 +81,7 @@ class RobotSpec:
     joint_armature: dict[str, float] = field(default_factory=dict)
     joint_effort_limit: dict[str, float] = field(default_factory=dict)
     publish_when_paused: bool = False
+    payload: dict | None = None
     cam: tuple[float, float] = (10.0, -20.0)  # (distance, elevation)
 
 

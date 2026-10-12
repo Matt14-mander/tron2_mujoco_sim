@@ -9,7 +9,7 @@ import numpy as np
 
 from tron2_sim.channels import JointChannel
 from tron2_sim.core import apply_initial_joint_positions, apply_variant_model_overrides
-from tron2_sim.model_loader import load_mujoco_model
+from tron2_sim.model_loader import load_mujoco_model, load_payload_model
 from tron2_sim.modules.external_wrench import ExternalWrenchModule
 from tron2_sim.spec import ARM_YG, GRIPPER_YG, LEG_SF, SFYG
 from tron2_sim.variants import BASE_REGISTRY
@@ -19,6 +19,15 @@ MODEL = REPO / "robot-description" / "tron2a" / "SFYG_TRON2A" / "xml" / "robot.x
 
 
 class SfygVariantTest(unittest.TestCase):
+    def test_rigid_payload_mass_inertia_and_joint_layout(self):
+        model = load_payload_model(MODEL, .5, (.20, .12, .08), (.15, 0, 0))
+        body = model.body("paint_payload_Link")
+        self.assertAlmostEqual(model.body_mass.sum() - self.model.body_mass.sum(), .5)
+        self.assertEqual(model.nq, self.model.nq)
+        self.assertEqual(model.nu, self.model.nu)
+        np.testing.assert_allclose(body.pos, [.15, 0, 0])
+        np.testing.assert_allclose(body.inertia, .5 / 12 * np.array([.12**2+.08**2, .20**2+.08**2, .20**2+.12**2]))
+        self.assertEqual(model.body_parentid[body.id], model.body("gripper_base_Link").id)
     @classmethod
     def setUpClass(cls):
         if not MODEL.exists():

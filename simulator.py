@@ -45,6 +45,12 @@ def parse_args():
     parser.add_argument("--wrench-duration", type=float, default=None)
     parser.add_argument("--wrench-ramp-time", type=float, default=0.25)
     parser.add_argument("--wrench-frequency", type=float, default=1.0)
+    parser.add_argument("--sfyg-support-port", type=int, default=None,
+                        help="SFYG only: send local base-speed/foot-contact telemetry to deployment")
+    parser.add_argument("--payload-mass", type=float, default=None,
+                        help="SFYG: attach a rigid PAINT payload in kg")
+    parser.add_argument("--payload-dimensions", type=float, nargs=3, default=(.20, .12, .08))
+    parser.add_argument("--payload-offset", type=float, nargs=3, default=(.15, 0., 0.))
     cli, _ = parser.parse_known_args()
     return cli
 
@@ -64,6 +70,8 @@ def main():
     cli = parse_args()
     robot_type = os.getenv("ROBOT_TYPE")
     base, _family, family_dir = tspec.resolve_robot_type(robot_type, BASE_REGISTRY)
+    if cli.payload_mass is not None and base != "SFYG":
+        raise ValueError("Payload is supported only for SFYG")
     print(f"Robot type: {robot_type}")
 
     from tron2_sim.core import SimCore

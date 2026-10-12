@@ -10,6 +10,7 @@ Only TRON2A currently has an upstream SFYG MuJoCo asset.
 """
 
 from ..modules.external_wrench import ExternalWrenchModule
+from ..modules.sfyg_support_telemetry import SfygSupportTelemetry
 from ..spec import IMU_STD, SFYG, ChannelSpec, RobotSpec
 
 INITIAL_ARM_AND_GRIPPER = {
@@ -58,6 +59,11 @@ def build(robot_type, family_dir, cli):
             "currently provides SFYG_TRON2A only."
         )
     modules = []
+    support_port = getattr(cli, "sfyg_support_port", None)
+    if support_port is not None:
+        if not 1024 <= support_port <= 65535:
+            raise ValueError("--sfyg-support-port must be between 1024 and 65535")
+        modules.append(SfygSupportTelemetry(support_port))
     wrench = getattr(cli, "external_wrench", None)
     if wrench is not None:
         modules.append(
@@ -98,6 +104,9 @@ def build(robot_type, family_dir, cli):
         # Space switches MuJoCo to manual mode; keep SDK state/IMU heartbeats
         # alive so the external policy controller does not time out while paused.
         publish_when_paused=True,
+        payload=({"mass": cli.payload_mass, "dimensions": cli.payload_dimensions,
+                  "offset": cli.payload_offset}
+                 if getattr(cli, "payload_mass", None) is not None else None),
         sdk_robot="Tron2",
         cam=(3.0, -15.0),
     )

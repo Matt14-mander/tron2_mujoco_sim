@@ -213,6 +213,15 @@ another mechanism.
 for model, actuator-map and physics smoke tests on hosts where the native SDK is
 unavailable; it is not a sim2sim deployment mode.
 
+### 4b. SFYG support telemetry for guarded standing tests
+
+Add `--sfyg-support-port 5556` when testing the deployment controller's
+experimental WALK/STAND state machine. The simulator sends local UDP packets
+with planar base speed and normal contact force for each foot at 50 Hz. The
+deployment side must use the matching `--sim-support-port 5556`; no telemetry
+is sent to the ONNX policy. This is MuJoCo ground truth, **not** a real-robot
+contact sensor. A missing or stale packet prevents entry into PD STAND.
+
 ## 5. Architecture
 
 ```
