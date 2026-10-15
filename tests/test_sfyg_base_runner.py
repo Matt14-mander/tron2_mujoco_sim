@@ -25,6 +25,18 @@ def zero_network(path, nin, nout):
 
 
 class BaseRunnerTest(unittest.TestCase):
+    def test_cycle_endpoints_and_continuity(self):
+        durations = (3., 4., 5., 4., 5.)
+        for t, name, vx in [(0., 'initial_stop', 0.), (3., 'accelerate', 0.),
+                            (5., 'accelerate', .25), (7., 'cruise', .5),
+                            (12., 'decelerate', .5), (14., 'decelerate', .25),
+                            (16., 'final_stop', 0.), (21., 'final_stop', 0.)]:
+            phase, actual = module.speed_cycle(t, .5, durations)
+            self.assertEqual(phase, name)
+            self.assertAlmostEqual(actual, vx)
+        for t in [3., 7., 12., 16.]:
+            self.assertAlmostEqual(module.speed_cycle(t - 1e-7, .5, durations)[1],
+                                   module.speed_cycle(t + 1e-7, .5, durations)[1], places=6)
     def test_base_input_order_and_invalid_width(self):
         value = module.compose_base_input(np.ones(3), np.ones(42) * 2, np.ones(3) * 3)
         np.testing.assert_array_equal(value, [1.] * 3 + [2.] * 42 + [3.] * 3)
@@ -40,6 +52,11 @@ class BaseRunnerTest(unittest.TestCase):
             zero_network(root / 'policy.onnx', 48, 10)
             with patch('sys.argv', ['base-test', '--model-dir', str(root), '--duration', '.06']):
                 module.main()
+            with patch('sys.argv', ['base-test', '--model-dir', str(root), '--speed-cycle',
+                       '--cycle-times', '.01', '.01', '.01', '.01', '.02',
+                       '--log-csv', str(root / 'cycle.csv')]):
+                module.main()
+            self.assertIn('cmd_vx', (root / 'cycle.csv').read_text())
             zero_network(root / 'policy.onnx', 78, 10)
             with self.assertRaises(ValueError):
                 module.session(root / 'policy.onnx', 48, 10)

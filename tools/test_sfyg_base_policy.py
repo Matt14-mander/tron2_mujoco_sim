@@ -5,6 +5,7 @@ Check the checkpoint's actual training configuration before interpreting a fail.
 """
 
 import argparse
+import csv
 import importlib.util
 import math
 import sys
@@ -30,6 +31,20 @@ def compose_base_input(latent, proprio, command):
     if result.shape != (48,) or not np.isfinite(result).all():
         raise ValueError("BASE actor requires latent(3)+proprio(42)+command(3)")
     return result
+
+
+def speed_cycle(t, peak, durations):
+    """Zero, smooth acceleration, cruise, smooth braking, zero; seconds."""
+    names = ('initial_stop', 'accelerate', 'cruise', 'decelerate', 'final_stop')
+    elapsed = 0.
+    for i, duration in enumerate(durations):
+        if t < elapsed + duration:
+            u = np.clip((t - elapsed) / duration, 0., 1.)
+            smooth = u * u * (3. - 2. * u)
+            value = (0., peak * smooth, peak, peak * (1. - smooth), 0.)[i]
+            return names[i], float(value)
+        elapsed += duration
+    return names[-1], 0.
 
 
 def session(path, nin, nout):
@@ -76,6 +91,11 @@ def main():
     parser.add_argument('--config', type=Path, help='18-joint SFYG mapping/scales YAML; verify against training')
     parser.add_argument('--command', type=float, nargs=3, default=(0., 0., 0.))
     parser.add_argument('--duration', type=float, default=10.)
+    parser.add_argument('--speed-cycle', action='store_true', help='0 -> peak -> 0; total duration is sum of --cycle-times')
+    parser.add_argument('--peak-speed', type=float, default=.5, help='signed body-x command in m/s')
+    parser.add_argument('--cycle-times', type=float, nargs=5, default=(3., 4., 5., 4., 5.),
+                        metavar=('INITIAL', 'ACCEL', 'CRUISE', 'DECEL', 'STOP'))
+    parser.add_argument('--log-csv', type=Path, help='new CSV path; records command and measured velocity at policy rate')
     parser.add_argument('--arm-position', type=float, nargs=6, default=(0.,)*6)
     parser.add_argument('--arm-kp', type=float, default=800.)
     parser.add_argument('--arm-kd', type=float, default=40.)
@@ -83,12 +103,16 @@ def main():
     parser.add_argument('--base-height', type=float, default=.85)
     parser.add_argument('--viewer', action='store_true')
     args = parser.parse_args()
-    values = [*args.command, args.duration, *args.arm_position,
+    values = [*args.command, args.duration, *args.arm_position, args.peak_speed, *args.cycle_times,
               args.arm_kp, args.arm_kd, args.arm_effort, args.base_height]
     if (not np.isfinite(values).all() or min(args.duration, args.arm_kp,
             args.arm_effort, args.base_height) <= 0 or args.arm_kd < 0
             or np.any(np.abs(args.command) > [1., .5, 1.5])):
         parser.error('Invalid finite runtime settings')
+    if args.speed_cycle:
+        if any(args.command) or abs(args.peak_speed) > 1 or min(args.cycle_times) <= 0:
+            parser.error('Speed cycle requires zero --command, positive stage times and |peak-speed| <= 1')
+        args.duration = sum(args.cycle_times)
     deploy = args.deploy_repo.resolve()
     contract_spec = importlib.util.spec_from_file_location('base_test_contract', deploy / 'controllers/sfyg_contract.py')
     contract = importlib.util.module_from_spec(contract_spec)
@@ -124,22 +148,42 @@ def main():
     print(f'No SDK/payload/estimator/future wrench; command={command.tolist()}', flush=True)
     print(f'Arm target={args.arm_position}, native PD={args.arm_kp}/{args.arm_kd}, effort={args.arm_effort}', flush=True)
     print(f'Config scales/gait: {config.path}; verify checkpoint training settings', flush=True)
-    print('time,z,tilt_deg,vx_body,vy_body,max_abs_action', flush=True)
+    if args.speed_cycle:
+        print(f'Speed cycle: times={args.cycle_times}, peak={args.peak_speed}m/s, total={args.duration}s', flush=True)
+    print('time,phase,cmd_vx,z,tilt_deg,vx_body,vy_body,max_abs_action', flush=True)
     viewer = None
     start = time.monotonic()
     max_tilt = 0.
     velocity_sum = np.zeros(3)
     velocity_count = 0
+    previous_phase = None
+    stop_speeds = []
+    log_stream = None
+    writer = None
     try:
+        if args.log_csv:
+            args.log_csv.parent.mkdir(parents=True, exist_ok=True)
+            log_stream = args.log_csv.open('x', newline='', encoding='utf-8')
+            writer = csv.writer(log_stream)
+            writer.writerow(['time', 'phase', 'cmd_vx', 'cmd_vy', 'cmd_wz',
+                             'z', 'tilt_deg', 'vx_body', 'vy_body', 'vz_body', 'wz_body', 'max_abs_action'])
         if args.viewer:
             from mujoco import viewer as viewer_api
             viewer = viewer_api.launch_passive(model, data)
+        start = time.monotonic()
         for step in range(round(args.duration / model.opt.timestep) + 1):
             if viewer is not None and not viewer.is_running():
                 raise RuntimeError('Viewer closed before test completed')
             q = np.array([data.qpos[qp] for qp, _, _ in channel.map])
             dq = np.array([data.qvel[qv] for _, qv, _ in channel.map])
             quat, gyro, _ = channel._read_imu(data)
+            phase = 'constant'
+            if args.speed_cycle:
+                phase, vx = speed_cycle(data.time, args.peak_speed, args.cycle_times)
+                command[:] = (vx, 0., 0.)
+            if phase != previous_phase:
+                print(f'PHASE {phase}: t={data.time:.3f}s', flush=True)
+                previous_phase = phase
             if step % policy_steps == 0:
                 obs = contract.build_proprio_observation(config, q, dq, gyro, quat, action, command, data.time)
                 if step == 0:
@@ -159,11 +203,16 @@ def main():
             velocity = np.zeros(6)
             mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY,
                                     model.body('base_Link').id, velocity, 1)
+            if args.speed_cycle and data.time >= args.duration - min(2., args.cycle_times[-1]):
+                stop_speeds.append(float(np.linalg.norm(velocity[3:5])))
+            if writer is not None and step % policy_steps == 0:
+                writer.writerow([data.time, phase, *command, data.qpos[2], tilt,
+                                 *velocity[3:], velocity[2], np.max(np.abs(action))])
             if data.time >= min(2., args.duration / 2):
                 velocity_sum += velocity[3:]
                 velocity_count += 1
             if step % max(1, round(.5 / model.opt.timestep)) == 0:
-                print(f'{data.time:.3f},{data.qpos[2]:.4f},{tilt:.3f},'
+                print(f'{data.time:.3f},{phase},{command[0]:.4f},{data.qpos[2]:.4f},{tilt:.3f},'
                       f'{velocity[3]:.4f},{velocity[4]:.4f},{np.max(np.abs(action)):.4f}', flush=True)
             if not np.isfinite(data.qpos).all() or tilt > 35 or data.qpos[2] < .45:
                 raise RuntimeError(f'BASE test rejected at {data.time:.3f}s: tilt={tilt:.2f}, z={data.qpos[2]:.3f}')
@@ -175,7 +224,13 @@ def main():
                 time.sleep(max(0., start + data.time - time.monotonic()))
         print(f'COMPLETED: max_tilt={max_tilt:.3f}deg, mean_body_velocity='
               f'{(velocity_sum / max(1, velocity_count)).tolist()}', flush=True)
+        if stop_speeds:
+            print(f'FINAL_STOP last {min(2., args.cycle_times[-1])}s: '
+                  f'mean_planar_speed={np.mean(stop_speeds):.4f}m/s, '
+                  f'p95_planar_speed={np.percentile(stop_speeds, 95):.4f}m/s', flush=True)
     finally:
+        if log_stream is not None:
+            log_stream.close()
         if viewer is not None:
             viewer.close()
 
